@@ -77,9 +77,10 @@ Once the card is installed, add it to your **Lovelace** dashboard by creating a 
 
 #### Available Buttons
 - **D-Pad**: up, down, left, right, select
-- **Control Buttons**: back, home, assistant, volume_mute, youtube, netflix
-- **Power Buttons**: power, input
-- **Volume**: volume_up, volume_down
+- **Control Buttons**: back, home, assistant, volume_up, volume_mute, volume_down, youtube, netflix
+- **Bottom Buttons**: power, star
+
+`star` is rendered as the Google TV Streamer favorites button. For existing configurations, the card still accepts `input` as a fallback mapping for that button position.
 
 ![all](examples/custom_card_config.png)
 
@@ -91,7 +92,7 @@ Clicking on a button triggers the corresponding action in your Home Assistant in
 #### Example of Lovelace Custom Card
 ```yaml
 type: custom:ccwgtv-remote-card
-title: Chromecast with Google TV Remote
+title: Google TV Streamer Remote
 scale: 1.5
 up:
   domain: remote
@@ -164,7 +165,7 @@ power:
   service: toggle
   service_data:
     entity_id: remote.ccwgtv
-input:
+star:
   domain: media_player
   service: select_source
   service_data:
@@ -188,13 +189,13 @@ volume_up:
 
 1. **ASSISTANT** button on this custom remote card will open Chromecast **SEARCH** menu, similar as pressing **search** button on Chromecast Voice Remote.
 
-2. There is no mapping in Android TV Remote for **INPUT** button. Instead, the above configuration will use media_player command to switch to source LiveTV on corresponding TV entity where Chromecast is connected.
+2. There is no mapping in Android TV Remote for the Google TV Streamer **STAR** button. Instead, the above configuration uses a media_player command to switch to source LiveTV on the corresponding TV entity where Chromecast is connected.
    
 Depending on TV vendor, commands from TV official integration can be used.
 
 LG WebOS integration https://www.home-assistant.io/integrations/webostv/ example for calling button commands **EXIT** or **MENU**:
 ```yaml
-input:
+star:
   domain: webostv
   service: button
   service_data:
