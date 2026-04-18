@@ -13,7 +13,12 @@ class CCwGTVRemoteCard extends HTMLElement {
         this.buttonAliases = {
             star: ['input'],
         };
+        this.swipePointer = null;
         this.handleClick = this.handleClick.bind(this);
+        this.handleSwipePointerDown = this.handleSwipePointerDown.bind(this);
+        this.handleSwipePointerMove = this.handleSwipePointerMove.bind(this);
+        this.handleSwipePointerUp = this.handleSwipePointerUp.bind(this);
+        this.handleSwipePointerCancel = this.handleSwipePointerCancel.bind(this);
         this.applyStyles();
     }
 
@@ -72,6 +77,91 @@ class CCwGTVRemoteCard extends HTMLElement {
                 border-radius: 50%;
                 background: var(--ccwgtv-surface-soft);
                 box-shadow: inset 0 0 0 1px var(--ccwgtv-ring);
+            }
+
+            .swipe-pad {
+                position: relative;
+                width: calc(138px * var(--ccwgtv-scale));
+                height: calc(138px * var(--ccwgtv-scale));
+                border-radius: 50%;
+                background: var(--ccwgtv-surface-soft);
+                box-shadow: inset 0 0 0 1px var(--ccwgtv-ring);
+                touch-action: none;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            .swipe-pad::before,
+            .swipe-pad::after {
+                content: '';
+                position: absolute;
+                inset: calc(18px * var(--ccwgtv-scale));
+                border-radius: 50%;
+                pointer-events: none;
+            }
+
+            .swipe-pad::before {
+                box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+            }
+
+            .swipe-pad::after {
+                inset: calc(44px * var(--ccwgtv-scale));
+                background: rgba(255, 255, 255, 0.08);
+            }
+
+            .swipe-pad[data-active-direction='select']::after {
+                background: var(--ccwgtv-press);
+            }
+
+            .swipe-pad-hint {
+                position: absolute;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: calc(26px * var(--ccwgtv-scale));
+                height: calc(26px * var(--ccwgtv-scale));
+                color: var(--ccwgtv-muted);
+                pointer-events: none;
+                transition: color 120ms ease, transform 120ms ease;
+            }
+
+            .swipe-pad-hint--up {
+                top: calc(14px * var(--ccwgtv-scale));
+                left: 50%;
+                transform: translateX(-50%);
+            }
+
+            .swipe-pad-hint--right {
+                top: 50%;
+                right: calc(14px * var(--ccwgtv-scale));
+                transform: translateY(-50%);
+            }
+
+            .swipe-pad-hint--down {
+                bottom: calc(14px * var(--ccwgtv-scale));
+                left: 50%;
+                transform: translateX(-50%);
+            }
+
+            .swipe-pad-hint--left {
+                top: 50%;
+                left: calc(14px * var(--ccwgtv-scale));
+                transform: translateY(-50%);
+            }
+
+            .swipe-pad-hint--center {
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: var(--ccwgtv-text);
+            }
+
+            .swipe-pad[data-active-direction='up'] .swipe-pad-hint--up,
+            .swipe-pad[data-active-direction='right'] .swipe-pad-hint--right,
+            .swipe-pad[data-active-direction='down'] .swipe-pad-hint--down,
+            .swipe-pad[data-active-direction='left'] .swipe-pad-hint--left,
+            .swipe-pad[data-active-direction='select'] .swipe-pad-hint--center {
+                color: var(--ccwgtv-text);
             }
 
             .dpad-grid {
@@ -169,7 +259,7 @@ class CCwGTVRemoteCard extends HTMLElement {
     }
 
     static getStubConfig() {
-        return { title: 'Google TV Streamer Remote', scale: 0.87, actions: 'add below as per documentation' };
+        return { title: 'Google TV Streamer Remote', scale: 0.87, pad_mode: 'buttons', actions: 'add below as per documentation' };
     }
 
     setConfig(config) {
@@ -226,25 +316,17 @@ class CCwGTVRemoteCard extends HTMLElement {
         return null;
     }
 
+    getPadMode() {
+        return this.config?.pad_mode === 'swipe' ? 'swipe' : 'buttons';
+    }
+
     renderRemote() {
         if (!this.content) {
             return;
         }
 
         this.content.innerHTML = `
-            <div class="dpad-shell">
-                <div class="dpad-grid">
-                    <div class="spacer"></div>
-                    ${this.renderButton('up', 'mdi:menu-up', 'key key--dpad')}
-                    <div class="spacer"></div>
-                    ${this.renderButton('left', 'mdi:menu-left', 'key key--dpad')}
-                    ${this.renderButton('select', 'mdi:circle-small', 'key key--dpad key--dpad-center')}
-                    ${this.renderButton('right', 'mdi:menu-right', 'key key--dpad')}
-                    <div class="spacer"></div>
-                    ${this.renderButton('down', 'mdi:menu-down', 'key key--dpad')}
-                    <div class="spacer"></div>
-                </div>
-            </div>
+            ${this.renderPad()}
             <div class="row">
                 ${this.renderButton('back', 'mdi:arrow-left', 'key')}
                 ${this.renderButton('home', 'mdi:home', 'key')}
@@ -264,6 +346,38 @@ class CCwGTVRemoteCard extends HTMLElement {
             <div class="row">
                 ${this.renderButton('power', 'mdi:power', 'key key--bottom')}
                 ${this.renderButton('star', 'mdi:star-outline', 'key key--bottom')}
+            </div>
+        `;
+
+        this.attachSwipePadEvents();
+    }
+
+    renderPad() {
+        if (this.getPadMode() === 'swipe') {
+            return `
+                <div class="swipe-pad" data-swipe-pad="true" aria-label="swipe pad" role="button" tabindex="0">
+                    <div class="swipe-pad-hint swipe-pad-hint--up"><ha-icon icon="mdi:menu-up"></ha-icon></div>
+                    <div class="swipe-pad-hint swipe-pad-hint--right"><ha-icon icon="mdi:menu-right"></ha-icon></div>
+                    <div class="swipe-pad-hint swipe-pad-hint--down"><ha-icon icon="mdi:menu-down"></ha-icon></div>
+                    <div class="swipe-pad-hint swipe-pad-hint--left"><ha-icon icon="mdi:menu-left"></ha-icon></div>
+                    <div class="swipe-pad-hint swipe-pad-hint--center"><ha-icon icon="mdi:circle-small"></ha-icon></div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="dpad-shell">
+                <div class="dpad-grid">
+                    <div class="spacer"></div>
+                    ${this.renderButton('up', 'mdi:menu-up', 'key key--dpad')}
+                    <div class="spacer"></div>
+                    ${this.renderButton('left', 'mdi:menu-left', 'key key--dpad')}
+                    ${this.renderButton('select', 'mdi:circle-small', 'key key--dpad key--dpad-center')}
+                    ${this.renderButton('right', 'mdi:menu-right', 'key key--dpad')}
+                    <div class="spacer"></div>
+                    ${this.renderButton('down', 'mdi:menu-down', 'key key--dpad')}
+                    <div class="spacer"></div>
+                </div>
             </div>
         `;
     }
@@ -290,6 +404,14 @@ class CCwGTVRemoteCard extends HTMLElement {
         this.content.querySelectorAll('button[data-action]').forEach((button) => {
             button.disabled = !this.getActionConfig(button.dataset.action);
         });
+
+        const swipePad = this.content.querySelector('[data-swipe-pad]');
+        if (swipePad) {
+            const hasAnySwipeAction = ['up', 'right', 'down', 'left', 'select'].some((action) => this.getActionConfig(action));
+            swipePad.setAttribute('aria-disabled', hasAnySwipeAction ? 'false' : 'true');
+            swipePad.style.opacity = hasAnySwipeAction ? '1' : '0.38';
+            swipePad.style.cursor = hasAnySwipeAction ? 'pointer' : 'default';
+        }
     }
 
     handleClick(event) {
@@ -308,6 +430,123 @@ class CCwGTVRemoteCard extends HTMLElement {
             actionConfig.service,
             actionConfig.service_data || {}
         );
+    }
+
+    attachSwipePadEvents() {
+        const swipePad = this.content?.querySelector('[data-swipe-pad]');
+        if (!swipePad) {
+            return;
+        }
+
+        swipePad.addEventListener('pointerdown', this.handleSwipePointerDown);
+        swipePad.addEventListener('pointermove', this.handleSwipePointerMove);
+        swipePad.addEventListener('pointerup', this.handleSwipePointerUp);
+        swipePad.addEventListener('pointercancel', this.handleSwipePointerCancel);
+    }
+
+    triggerAction(action) {
+        if (!this._hass) {
+            return;
+        }
+
+        const actionConfig = this.getActionConfig(action);
+        if (!actionConfig) {
+            return;
+        }
+
+        this._hass.callService(
+            actionConfig.domain,
+            actionConfig.service,
+            actionConfig.service_data || {}
+        );
+    }
+
+    setSwipePadDirection(direction) {
+        const swipePad = this.content?.querySelector('[data-swipe-pad]');
+        if (swipePad) {
+            swipePad.dataset.activeDirection = direction || '';
+        }
+    }
+
+    clearSwipePointer() {
+        this.swipePointer = null;
+        this.setSwipePadDirection('');
+    }
+
+    getSwipeAction(deltaX, deltaY) {
+        const threshold = 22 * this.scale;
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+
+        if (absX < threshold && absY < threshold) {
+            return 'select';
+        }
+
+        if (absX > absY) {
+            return deltaX > 0 ? 'right' : 'left';
+        }
+
+        return deltaY > 0 ? 'down' : 'up';
+    }
+
+    handleSwipePointerDown(event) {
+        const swipePad = event.currentTarget;
+        const hasAnySwipeAction = ['up', 'right', 'down', 'left', 'select'].some((action) => this.getActionConfig(action));
+        if (!hasAnySwipeAction) {
+            return;
+        }
+
+        this.swipePointer = {
+            id: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+        };
+        swipePad.setPointerCapture(event.pointerId);
+        this.setSwipePadDirection('select');
+    }
+
+    handleSwipePointerMove(event) {
+        if (!this.swipePointer || event.pointerId !== this.swipePointer.id) {
+            return;
+        }
+
+        const action = this.getSwipeAction(
+            event.clientX - this.swipePointer.startX,
+            event.clientY - this.swipePointer.startY
+        );
+        this.setSwipePadDirection(action);
+    }
+
+    handleSwipePointerUp(event) {
+        if (!this.swipePointer || event.pointerId !== this.swipePointer.id) {
+            return;
+        }
+
+        const swipePad = event.currentTarget;
+        const action = this.getSwipeAction(
+            event.clientX - this.swipePointer.startX,
+            event.clientY - this.swipePointer.startY
+        );
+
+        if (swipePad.hasPointerCapture(event.pointerId)) {
+            swipePad.releasePointerCapture(event.pointerId);
+        }
+
+        this.triggerAction(action);
+        this.clearSwipePointer();
+    }
+
+    handleSwipePointerCancel(event) {
+        if (!this.swipePointer || event.pointerId !== this.swipePointer.id) {
+            return;
+        }
+
+        const swipePad = event.currentTarget;
+        if (swipePad.hasPointerCapture(event.pointerId)) {
+            swipePad.releasePointerCapture(event.pointerId);
+        }
+
+        this.clearSwipePointer();
     }
 
     set hass(hass) {

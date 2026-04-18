@@ -73,6 +73,7 @@ Once the card is installed, add it to your **Lovelace** dashboard by creating a 
 #### Add or modify the Configuration Options
 - **title**: The title of the card.
 - **scale**: Adjust the size of the remote (default: 0.87, range: 0.5 to 1.5).
+- **pad_mode**: Choose the top navigation pad interaction mode: `buttons` (default) or `swipe`.
 - **Button Mappings**: Define the action for each button using the Home Assistant domain, service, and service_data.
 
 #### Available Buttons
@@ -94,6 +95,7 @@ Clicking on a button triggers the corresponding action in your Home Assistant in
 type: custom:ccwgtv-remote-card
 title: Google TV Streamer Remote
 scale: 1.5
+pad_mode: buttons
 up:
   domain: remote
   service: send_command
@@ -188,6 +190,8 @@ volume_up:
 #### Limitations
 
 1. **ASSISTANT** button on this custom remote card will open Chromecast **SEARCH** menu, similar as pressing **search** button on Chromecast Voice Remote.
+
+You can switch the top navigation area to a swipe pad by setting `pad_mode: swipe`. A short tap triggers `select`, while swipes trigger `up`, `down`, `left`, or `right`.
 
 2. There is no mapping in Android TV Remote for the Google TV Streamer **STAR** button. Instead, the above configuration uses a media_player command to switch to source LiveTV on the corresponding TV entity where Chromecast is connected.
    
