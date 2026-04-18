@@ -1,8 +1,8 @@
 window.customCards = window.customCards || [];
 window.customCards.push({
-    type: "ccwgtv-remote-card",
-    name: "CCwGTV Remote Card",
-    description: "A custom remote control for Google TV",
+    type: 'ccwgtv-remote-card',
+    name: 'CCwGTV Remote Card',
+    description: 'A compact Google TV remote control for Home Assistant',
     preview: true,
 });
 
@@ -10,120 +10,162 @@ class CCwGTVRemoteCard extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
-        this.styleElement = document.createElement('style');
-        this.shadowRoot.appendChild(this.styleElement);
-
-        this.buttonPressState = {};
         this.buttonAliases = {
             star: ['input'],
         };
-        this.boundResizeCanvas = this.resizeCanvas.bind(this);
-
+        this.handleClick = this.handleClick.bind(this);
         this.applyStyles();
-        this.preloadIcons();
     }
 
     applyStyles() {
-        this.styleElement.textContent = `
+        const style = document.createElement('style');
+        style.textContent = `
             :host {
                 display: block;
-                --ccwgtv-shell-top: rgba(25, 31, 41, 0.96);
-                --ccwgtv-shell-bottom: rgba(9, 12, 18, 0.98);
-                --ccwgtv-shell-border: rgba(255, 255, 255, 0.08);
-                --ccwgtv-title-bg: rgba(255, 255, 255, 0.07);
-                --ccwgtv-title-color: var(--primary-text-color, #f5f7fa);
-                --ccwgtv-remote-body-start: #394250;
-                --ccwgtv-remote-body-end: #242b36;
-                --ccwgtv-remote-edge: rgba(255, 255, 255, 0.12);
-                --ccwgtv-button-top: #eef2f7;
-                --ccwgtv-button-bottom: #c3ccd8;
-                --ccwgtv-button-top-muted: #d9e3f5;
-                --ccwgtv-button-bottom-muted: #a9b7cf;
-                --ccwgtv-center-top: #d8dee8;
-                --ccwgtv-center-bottom: #aeb7c5;
-                --ccwgtv-dpad-ring: rgba(255, 255, 255, 0.2);
-                --ccwgtv-shadow: rgba(0, 0, 0, 0.34);
+                --ccwgtv-scale: 1;
+                --ccwgtv-text: var(--primary-text-color, #ffffff);
+                --ccwgtv-muted: var(--secondary-text-color, rgba(255, 255, 255, 0.72));
+                --ccwgtv-surface: rgba(255, 255, 255, 0.08);
+                --ccwgtv-surface-strong: rgba(255, 255, 255, 0.12);
+                --ccwgtv-surface-soft: rgba(255, 255, 255, 0.05);
+                --ccwgtv-ring: rgba(255, 255, 255, 0.08);
+                --ccwgtv-press: rgba(255, 255, 255, 0.16);
+                --ccwgtv-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+            }
+
+            ha-card {
+                background: transparent;
+                border: 0;
+                box-shadow: none;
+                padding: 0;
             }
 
             .card {
-                position: relative;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 14px;
-                padding: 18px 14px 20px;
-                background: linear-gradient(180deg, var(--ccwgtv-shell-top), var(--ccwgtv-shell-bottom));
-                border: 1px solid var(--ccwgtv-shell-border);
-                border-radius: 32px;
-                box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-                overflow: hidden;
+                gap: calc(8px * var(--ccwgtv-scale));
+                color: var(--ccwgtv-text);
             }
 
             .title {
                 margin: 0;
-                padding: 8px 14px;
-                font-size: 0.95rem;
-                line-height: 1.1;
-                font-weight: 600;
-                letter-spacing: 0.02em;
+                color: var(--ccwgtv-muted);
+                font-size: calc(14px * var(--ccwgtv-scale));
+                font-weight: 500;
+                line-height: 1.2;
                 text-align: center;
-                color: var(--ccwgtv-title-color);
-                background: var(--ccwgtv-title-bg);
-                border: 1px solid rgba(255, 255, 255, 0.06);
-                border-radius: 999px;
-                backdrop-filter: blur(12px);
             }
 
-            .content {
+            .remote {
+                width: calc(196px * var(--ccwgtv-scale));
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: calc(10px * var(--ccwgtv-scale));
+            }
+
+            .dpad-shell {
+                width: calc(138px * var(--ccwgtv-scale));
+                height: calc(138px * var(--ccwgtv-scale));
+                padding: calc(8px * var(--ccwgtv-scale));
+                border-radius: 50%;
+                background: var(--ccwgtv-surface-soft);
+                box-shadow: inset 0 0 0 1px var(--ccwgtv-ring);
+            }
+
+            .dpad-grid {
+                width: 100%;
+                height: 100%;
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                grid-template-rows: repeat(3, 1fr);
+                gap: calc(6px * var(--ccwgtv-scale));
+            }
+
+            .row {
+                width: 100%;
                 display: flex;
                 justify-content: center;
-                width: 100%;
+                gap: calc(10px * var(--ccwgtv-scale));
             }
 
-            .canvas {
-                display: block;
-                background: transparent;
+            button {
+                appearance: none;
+                -webkit-appearance: none;
+                border: 0;
+                outline: 0;
+                padding: 0;
+                margin: 0;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--ccwgtv-text);
+                background: var(--ccwgtv-surface);
+                cursor: pointer;
+                user-select: none;
+                -webkit-tap-highlight-color: transparent;
+                transition: transform 120ms ease, background-color 120ms ease, opacity 120ms ease;
+            }
+
+            button:hover {
+                background: var(--ccwgtv-surface-strong);
+            }
+
+            button:active {
+                background: var(--ccwgtv-press);
+                transform: scale(0.96);
+            }
+
+            button:disabled {
+                opacity: 0.38;
+                cursor: default;
+            }
+
+            .key {
+                width: calc(56px * var(--ccwgtv-scale));
+                height: calc(56px * var(--ccwgtv-scale));
+                border-radius: 50%;
+                box-shadow: var(--ccwgtv-shadow);
+            }
+
+            .key--dpad {
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                background: var(--ccwgtv-surface-strong);
+                box-shadow: none;
+            }
+
+            .key--dpad-center {
+                background: rgba(255, 255, 255, 0.18);
+            }
+
+            .key--bottom {
+                width: calc(42px * var(--ccwgtv-scale));
+                height: calc(42px * var(--ccwgtv-scale));
+                box-shadow: none;
+            }
+
+            .spacer {
+                width: 100%;
+                height: 100%;
+            }
+
+            ha-icon {
+                --mdc-icon-size: calc(24px * var(--ccwgtv-scale));
+                color: currentColor;
+            }
+
+            .key--dpad ha-icon {
+                --mdc-icon-size: calc(22px * var(--ccwgtv-scale));
+            }
+
+            .key--bottom ha-icon {
+                --mdc-icon-size: calc(19px * var(--ccwgtv-scale));
             }
         `;
-    }
-
-    preloadIcons() {
-        this.icons = {};
-        const iconPaths = {
-            up: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/menu-up.svg',
-            down: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/menu-down.svg',
-            left: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/menu-left.svg',
-            right: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/menu-right.svg',
-            select: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/circle-small.svg',
-            back: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/arrow-left.svg',
-            home: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/home.svg',
-            assistant: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/microphone.svg',
-            volume_mute: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/volume-off.svg',
-            volume_down: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/volume-minus.svg',
-            volume_up: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/volume-plus.svg',
-            youtube: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/youtube.svg',
-            netflix: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/netflix.svg',
-            power: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/power.svg',
-            star: 'https://cdn.jsdelivr.net/npm/@mdi/svg/svg/star-outline.svg',
-        };
-
-        const promises = Object.keys(iconPaths).map((key) => new Promise((resolve, reject) => {
-            const img = new Image();
-            img.src = iconPaths[key];
-            img.onload = () => {
-                this.icons[key] = img;
-                resolve();
-            };
-            img.onerror = reject;
-        }));
-
-        Promise.all(promises).then(() => {
-            if (this.content) {
-                this.drawRemoteControl();
-            }
-        }).catch((err) => {
-            console.error('Error loading icons', err);
-        });
+        this.shadowRoot.appendChild(style);
     }
 
     static getStubConfig() {
@@ -133,30 +175,33 @@ class CCwGTVRemoteCard extends HTMLElement {
     setConfig(config) {
         this.config = config;
         this.scale = Math.max(0.5, Math.min(this.config.scale || 0.87, 1.5));
+        this.style.setProperty('--ccwgtv-scale', String(this.scale));
 
-        if (!this.content) {
-            const card = document.createElement('ha-card');
-            card.classList.add('card');
+        if (!this.card) {
+            this.card = document.createElement('ha-card');
+            this.card.className = 'card';
 
             this.titleElement = document.createElement('h2');
-            this.titleElement.classList.add('title');
-            card.appendChild(this.titleElement);
+            this.titleElement.className = 'title';
+            this.card.appendChild(this.titleElement);
 
             this.content = document.createElement('div');
-            this.content.classList.add('content');
-            card.appendChild(this.content);
-            this.shadowRoot.appendChild(card);
+            this.content.className = 'remote';
+            this.content.addEventListener('click', this.handleClick);
+            this.card.appendChild(this.content);
 
-            window.addEventListener('resize', this.boundResizeCanvas);
+            this.shadowRoot.appendChild(this.card);
         }
 
         this.updateTitle();
-        this.buttonRegions = [];
-        this.drawRemoteControl();
+        this.renderRemote();
+        this.updateButtonStates();
     }
 
     disconnectedCallback() {
-        window.removeEventListener('resize', this.boundResizeCanvas);
+        if (this.content) {
+            this.content.removeEventListener('click', this.handleClick);
+        }
     }
 
     updateTitle() {
@@ -167,33 +212,6 @@ class CCwGTVRemoteCard extends HTMLElement {
         const title = this.config?.title;
         this.titleElement.hidden = !title;
         this.titleElement.textContent = title || '';
-    }
-
-    resizeCanvas() {
-        if (this.content) {
-            this.drawRemoteControl();
-        }
-    }
-
-    getThemeValue(name, fallback) {
-        const value = getComputedStyle(this).getPropertyValue(name).trim();
-        return value || fallback;
-    }
-
-    getPalette() {
-        return {
-            remoteBodyStart: this.getThemeValue('--ccwgtv-remote-body-start', '#394250'),
-            remoteBodyEnd: this.getThemeValue('--ccwgtv-remote-body-end', '#242b36'),
-            remoteEdge: this.getThemeValue('--ccwgtv-remote-edge', 'rgba(255, 255, 255, 0.12)'),
-            buttonTop: this.getThemeValue('--ccwgtv-button-top', '#eef2f7'),
-            buttonBottom: this.getThemeValue('--ccwgtv-button-bottom', '#c3ccd8'),
-            assistantTop: this.getThemeValue('--ccwgtv-button-top-muted', '#d9e3f5'),
-            assistantBottom: this.getThemeValue('--ccwgtv-button-bottom-muted', '#a9b7cf'),
-            centerTop: this.getThemeValue('--ccwgtv-center-top', '#d8dee8'),
-            centerBottom: this.getThemeValue('--ccwgtv-center-bottom', '#aeb7c5'),
-            dpadRing: this.getThemeValue('--ccwgtv-dpad-ring', 'rgba(255, 255, 255, 0.2)'),
-            shadow: this.getThemeValue('--ccwgtv-shadow', 'rgba(0, 0, 0, 0.34)'),
-        };
     }
 
     getActionConfig(action) {
@@ -208,240 +226,97 @@ class CCwGTVRemoteCard extends HTMLElement {
         return null;
     }
 
-    handleButtonPress(action, buttonIndex) {
-        const actionConfig = this.getActionConfig(action);
-        if (actionConfig && this._hass) {
-            this._hass.callService(actionConfig.domain, actionConfig.service, actionConfig.service_data || {});
-            this.triggerButtonFade(buttonIndex);
-        }
-    }
-
-    triggerButtonFade(buttonIndex) {
-        this.buttonPressState[buttonIndex] = { opacity: 1.0 };
-        this.animateFade(buttonIndex);
-    }
-
-    animateFade(buttonIndex) {
-        const fadeDuration = 250;
-        const fadeSteps = 30;
-        const stepDuration = fadeDuration / fadeSteps;
-
-        const fadeStep = () => {
-            if (!this.buttonPressState[buttonIndex]) {
-                return;
-            }
-
-            this.buttonPressState[buttonIndex].opacity -= 1 / fadeSteps;
-            if (this.buttonPressState[buttonIndex].opacity <= 0) {
-                delete this.buttonPressState[buttonIndex];
-            } else {
-                setTimeout(fadeStep, stepDuration);
-            }
-
-            this.drawRemoteControl();
-        };
-
-        fadeStep();
-    }
-
-    drawRemoteControl() {
+    renderRemote() {
         if (!this.content) {
             return;
         }
 
-        this.content.innerHTML = '<canvas id="remoteCanvas" class="canvas"></canvas>';
-        const canvas = this.content.querySelector('#remoteCanvas');
+        this.content.innerHTML = `
+            <div class="dpad-shell">
+                <div class="dpad-grid">
+                    <div class="spacer"></div>
+                    ${this.renderButton('up', 'mdi:menu-up', 'key key--dpad')}
+                    <div class="spacer"></div>
+                    ${this.renderButton('left', 'mdi:menu-left', 'key key--dpad')}
+                    ${this.renderButton('select', 'mdi:circle-small', 'key key--dpad key--dpad-center')}
+                    ${this.renderButton('right', 'mdi:menu-right', 'key key--dpad')}
+                    <div class="spacer"></div>
+                    ${this.renderButton('down', 'mdi:menu-down', 'key key--dpad')}
+                    <div class="spacer"></div>
+                </div>
+            </div>
+            <div class="row">
+                ${this.renderButton('back', 'mdi:arrow-left', 'key')}
+                ${this.renderButton('home', 'mdi:home', 'key')}
+            </div>
+            <div class="row">
+                ${this.renderButton('assistant', 'mdi:microphone', 'key')}
+                ${this.renderButton('volume_up', 'mdi:volume-plus', 'key')}
+            </div>
+            <div class="row">
+                ${this.renderButton('volume_mute', 'mdi:volume-off', 'key')}
+                ${this.renderButton('volume_down', 'mdi:volume-minus', 'key')}
+            </div>
+            <div class="row">
+                ${this.renderButton('youtube', 'mdi:youtube', 'key')}
+                ${this.renderButton('netflix', 'mdi:netflix', 'key')}
+            </div>
+            <div class="row">
+                ${this.renderButton('power', 'mdi:power', 'key key--bottom')}
+                ${this.renderButton('star', 'mdi:star-outline', 'key key--bottom')}
+            </div>
+        `;
+    }
 
-        const bodyWidth = 216 * this.scale;
-        const bodyHeight = bodyWidth * 10 / 3;
-        canvas.width = bodyWidth;
-        canvas.height = bodyHeight;
-        canvas.style.width = `${bodyWidth}px`;
-        canvas.style.height = `${bodyHeight}px`;
+    renderButton(action, icon, className) {
+        return `
+            <button
+                type="button"
+                class="${className}"
+                data-action="${action}"
+                aria-label="${action.replace('_', ' ')}"
+                title="${action.replace('_', ' ')}"
+            >
+                <ha-icon icon="${icon}"></ha-icon>
+            </button>
+        `;
+    }
 
-        const ctx = canvas.getContext('2d');
-        const palette = this.getPalette();
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        this.buttonRegions = [];
+    updateButtonStates() {
+        if (!this.content) {
+            return;
+        }
 
-        const drawCircleButton = (x, y, radius, colors, iconKey, action, buttonIndex) => {
-            const opacity = this.buttonPressState[buttonIndex]?.opacity || 1.0;
-            const gradient = ctx.createLinearGradient(x, y - radius, x, y + radius);
-            gradient.addColorStop(0, colors.top);
-            gradient.addColorStop(1, colors.bottom);
+        this.content.querySelectorAll('button[data-action]').forEach((button) => {
+            button.disabled = !this.getActionConfig(button.dataset.action);
+        });
+    }
 
-            ctx.save();
-            ctx.globalAlpha = opacity;
-            ctx.fillStyle = gradient;
-            ctx.shadowColor = palette.shadow;
-            ctx.shadowBlur = radius * 0.45;
-            ctx.shadowOffsetY = radius * 0.18;
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
+    handleClick(event) {
+        const button = event.target.closest('button[data-action]');
+        if (!button || button.disabled || !this._hass) {
+            return;
+        }
 
-            ctx.save();
-            ctx.globalAlpha = opacity;
-            ctx.strokeStyle = palette.remoteEdge;
-            ctx.lineWidth = Math.max(1, radius * 0.08);
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.stroke();
+        const actionConfig = this.getActionConfig(button.dataset.action);
+        if (!actionConfig) {
+            return;
+        }
 
-            if (iconKey && this.icons[iconKey]) {
-                const iconSize = radius * 1.02;
-                ctx.drawImage(this.icons[iconKey], x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
-            }
-            ctx.restore();
-
-            this.buttonRegions.push({ type: 'circle', x, y, radius, action });
-        };
-
-        const handleCanvasClick = (event) => {
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
-
-            for (const [index, button] of this.buttonRegions.entries()) {
-                const distance = Math.sqrt((mouseX - button.x) ** 2 + (mouseY - button.y) ** 2);
-                if (distance < button.radius) {
-                    this.handleButtonPress(button.action, index);
-                    break;
-                }
-            }
-        };
-
-        const handleCanvasHover = (event) => {
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
-
-            const isHovering = this.buttonRegions.some((button) => {
-                const distance = Math.sqrt((mouseX - button.x) ** 2 + (mouseY - button.y) ** 2);
-                return distance < button.radius;
-            });
-
-            canvas.style.cursor = isHovering ? 'pointer' : 'default';
-        };
-
-        canvas.addEventListener('click', handleCanvasClick.bind(this));
-        canvas.addEventListener('mousemove', handleCanvasHover);
-
-        const drawRemoteBody = () => {
-            const x = centerX - bodyWidth / 2;
-            const y = centerY - bodyHeight / 2;
-            const radius = bodyWidth * 0.46;
-            const gradient = ctx.createLinearGradient(0, y, 0, y + bodyHeight);
-            gradient.addColorStop(0, palette.remoteBodyStart);
-            gradient.addColorStop(1, palette.remoteBodyEnd);
-
-            ctx.save();
-            ctx.shadowColor = palette.shadow;
-            ctx.shadowBlur = bodyWidth * 0.2;
-            ctx.shadowOffsetY = bodyWidth * 0.08;
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.roundRect(x, y, bodyWidth, bodyHeight, radius);
-            ctx.fill();
-            ctx.restore();
-
-            ctx.strokeStyle = palette.remoteEdge;
-            ctx.lineWidth = Math.max(1.25, bodyWidth * 0.012);
-            ctx.beginPath();
-            ctx.roundRect(x + 1, y + 1, bodyWidth - 2, bodyHeight - 2, radius - 1);
-            ctx.stroke();
-        };
-
-        const drawDPad = () => {
-            const dPadRadius = bodyWidth * 0.46;
-            const buttonRadius = bodyWidth * 0.142;
-            const dPadCenterY = centerY - bodyHeight * 0.345;
-            const outerGradient = ctx.createLinearGradient(0, dPadCenterY - dPadRadius, 0, dPadCenterY + dPadRadius);
-            outerGradient.addColorStop(0, '#e8edf4');
-            outerGradient.addColorStop(1, '#b8c2d0');
-
-            ctx.save();
-            ctx.fillStyle = outerGradient;
-            ctx.shadowColor = palette.shadow;
-            ctx.shadowBlur = bodyWidth * 0.08;
-            ctx.shadowOffsetY = bodyWidth * 0.03;
-            ctx.beginPath();
-            ctx.arc(centerX, dPadCenterY, dPadRadius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-
-            ctx.strokeStyle = palette.dpadRing;
-            ctx.lineWidth = Math.max(2, bodyWidth * 0.012);
-            ctx.beginPath();
-            ctx.arc(centerX, dPadCenterY, dPadRadius, 0, Math.PI * 2);
-            ctx.stroke();
-
-            drawCircleButton(centerX, dPadCenterY - bodyHeight * 0.09, buttonRadius, { top: palette.buttonTop, bottom: palette.buttonBottom }, 'up', 'up', 0);
-            drawCircleButton(centerX, dPadCenterY + bodyHeight * 0.09, buttonRadius, { top: palette.buttonTop, bottom: palette.buttonBottom }, 'down', 'down', 1);
-            drawCircleButton(centerX - bodyWidth * 0.3, dPadCenterY, buttonRadius, { top: palette.buttonTop, bottom: palette.buttonBottom }, 'left', 'left', 2);
-            drawCircleButton(centerX + bodyWidth * 0.3, dPadCenterY, buttonRadius, { top: palette.buttonTop, bottom: palette.buttonBottom }, 'right', 'right', 3);
-            drawCircleButton(centerX, dPadCenterY, buttonRadius, { top: palette.centerTop, bottom: palette.centerBottom }, 'select', 'select', 4);
-        };
-
-        const drawControlButtons = () => {
-            const buttonRadius = bodyWidth / 6;
-            const leftX = centerX - bodyWidth / 4;
-            const rightX = centerX + bodyWidth / 4;
-            const startY = centerY - bodyHeight * 0.11;
-            const rowGap = bodyHeight * 0.115;
-            const buttons = [
-                { x: leftX, y: startY, icon: 'back', action: 'back', colors: { top: palette.buttonTop, bottom: palette.buttonBottom } },
-                { x: rightX, y: startY, icon: 'home', action: 'home', colors: { top: palette.buttonTop, bottom: palette.buttonBottom } },
-                { x: leftX, y: startY + rowGap, icon: 'assistant', action: 'assistant', colors: { top: palette.assistantTop, bottom: palette.assistantBottom } },
-                { x: rightX, y: startY + rowGap, icon: 'volume_up', action: 'volume_up', colors: { top: palette.buttonTop, bottom: palette.buttonBottom } },
-                { x: leftX, y: startY + rowGap * 2, icon: 'volume_mute', action: 'volume_mute', colors: { top: palette.buttonTop, bottom: palette.buttonBottom } },
-                { x: rightX, y: startY + rowGap * 2, icon: 'volume_down', action: 'volume_down', colors: { top: palette.buttonTop, bottom: palette.buttonBottom } },
-                { x: leftX, y: startY + rowGap * 3, icon: 'youtube', action: 'youtube', colors: { top: palette.buttonTop, bottom: palette.buttonBottom } },
-                { x: rightX, y: startY + rowGap * 3, icon: 'netflix', action: 'netflix', colors: { top: palette.buttonTop, bottom: palette.buttonBottom } },
-            ];
-
-            buttons.forEach((button, index) => {
-                drawCircleButton(button.x, button.y, buttonRadius, button.colors, button.icon, button.action, 5 + index);
-            });
-        };
-
-        const drawBottomButtons = () => {
-            const buttonRadius = bodyWidth / 10;
-            const rowY = centerY + bodyHeight * 0.345;
-            const capsuleWidth = bodyWidth * 0.72;
-            const capsuleHeight = bodyHeight * 0.088;
-            const capsuleX = centerX - capsuleWidth / 2;
-            const capsuleY = rowY - capsuleHeight / 2;
-
-            ctx.save();
-            ctx.strokeStyle = palette.dpadRing;
-            ctx.lineWidth = Math.max(2, bodyWidth * 0.011);
-            ctx.beginPath();
-            ctx.roundRect(capsuleX, capsuleY, capsuleWidth, capsuleHeight, capsuleHeight / 2);
-            ctx.stroke();
-            ctx.restore();
-
-            drawCircleButton(centerX - bodyWidth / 4, rowY, buttonRadius, { top: palette.buttonTop, bottom: palette.buttonBottom }, 'power', 'power', 13);
-            drawCircleButton(centerX + bodyWidth / 4, rowY, buttonRadius, { top: palette.buttonTop, bottom: palette.buttonBottom }, 'star', 'star', 14);
-        };
-
-        drawRemoteBody();
-        drawDPad();
-        drawControlButtons();
-        drawBottomButtons();
+        this._hass.callService(
+            actionConfig.domain,
+            actionConfig.service,
+            actionConfig.service_data || {}
+        );
     }
 
     set hass(hass) {
         this._hass = hass;
-        if (this.content) {
-            this.drawRemoteControl();
-        }
+        this.updateButtonStates();
     }
 
     getCardSize() {
-        return 6;
+        return 4;
     }
 }
 
